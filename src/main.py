@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import glob
 from collections import Counter
 
@@ -67,11 +67,30 @@ def test_file(path: str, verbose: bool, summary: bool) -> bool:
 def main():
     print("\nLexer Fortran 77 — PL2026")
 
-    paths = glob.glob("tests/**/*", recursive=True)
-    paths = [p for p in paths if not p.endswith("/")]
+    if len(sys.argv) == 1:
+        paths = glob.glob("tests/**/*", recursive=True)
+        paths = [p for p in paths if not p.endswith("/")]
 
-    if not paths:
-        print("Nenhum ficheiro encontrado em tests/")
+        if not paths:
+            print("Nenhum ficheiro encontrado em tests/")
+            sys.exit(1)
+
+    elif len(sys.argv) == 2:
+        path = sys.argv[1]
+
+        if not path.startswith("tests/"):
+            path = f"tests/{path}"
+
+        if not os.path.isfile(path):
+            print(f"Ficheiro não encontrado: {path}")
+            sys.exit(1)
+
+        paths = [path]
+
+    else:
+        print("Uso:")
+        print(f"\t{sys.argv[0]}                 -> todos os testes")
+        print(f"\t{sys.argv[0]} ficheiro.f      -> um teste")
         sys.exit(1)
 
     all_ok = True
