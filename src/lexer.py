@@ -39,7 +39,7 @@ def preprocess_fixed_form(source: str) -> list[tuple[int, str]]:
         # Coluna 6: continuação de linha (esta linha continua a anterior)
         if len(raw) >= 6 and raw[5] not in (' ', '0', '\t'):
             # linha de continuação: anexa-se colunas 7-72 à linha lógica anterior
-            continuation = raw[6:] if len(raw) else ''
+            continuation = raw[6:]
             if logical_lines:
                 logical_lines[-1] = (logical_lines[-1][0], logical_lines[-1][1] + continuation)
             i += 1
@@ -54,8 +54,8 @@ def preprocess_fixed_form(source: str) -> list[tuple[int, str]]:
         code = remove_inline_comment(code)
 
         # Reconstruir linha com label (se existir) para o lexer ver o label como token
-        if label:
-            logical_lines.append((lineon, label + ' ' + code))
+        if label.isdigit():
+            logical_lines.append((lineon, f"{label} {code}"))
         else:
             logical_lines.append((lineon, code))
 
@@ -114,6 +114,7 @@ keywords = {
     'DO'            : 'DO',
     'CONTINUE'      : 'CONTINUE',
     'GOTO'          : 'GOTO',
+    'ENDIF'         : 'ENDIF',
 
     # I/0
     'READ'          : 'READ',
@@ -200,17 +201,7 @@ tokens = (
     ]
 )
 
-# Remover duplicados mantendo a ordem
-seen = set()
-tokens_unique = []
-for t in tokens:
-    if t not in seen:
-        seen.add(t)
-        tokens_unique.append(t)
-tokens = tuple(tokens_unique)
-
-
-# ------------------------------------------ ESTADO ------------------------------------------ #
+tokens = tuple(dict.fromkeys(tokens))
 
 # Usa-se um estado especial 'string' para tokenizar literais de string, que não devem ser convertidos para maiúsculas
 states = (
@@ -231,9 +222,16 @@ def t_COMMENT(t):
     pass
 
 
+def t_LABEL(t):
+    r'^\d+'
+    t.value = int(t.value)
+    return t
+
+
 def t_NEWLINE(t):
     r'\n+'
-    t.lexer.lineno += t.value.count('\n')
+    t.lexer.lineno += len(t.value)
+    t.lexer.at_line_start = True
     return t
 
 
@@ -244,7 +242,6 @@ t_ignore = ' \t\r'
 def t_REAL_LITERAL(t):
     r'(\d+\.\d*|\.\d+)([EDed][+-]?\d+)?|\d+[EDed][+-]?\d+'
     t.value = float(t.value.upper().replace('D', 'E'))
-    t.type = 'REAL_LITERAL'
     return t
 
 
@@ -337,9 +334,9 @@ def t_DOLLAR(t):
 def t_DOT_OPERATOR(t):
     r'\.[A-Za-z]+\.'
     # Operadores da forma .XYZ. — relacionais, lógicos e literais booleanos
-    # Captura-se todos de uma vez e classifica-se por dicionário,
-    # já que é mais robusto do que ter uma regex por operador.
+    # Captura-se todos de uma vez e classifica-se por dicionário
     val = t.value.upper()
+
     if val in relational_ops:
         t.type = relational_ops[val]
     elif val in logical_ops:
@@ -349,8 +346,7 @@ def t_DOT_OPERATOR(t):
         t.value = (val == '.TRUE.')  # converte para bool Python
     else:
         # Operador desconhecido da forma .XYZ.
-        print(f"[LEXER] Erro: operador desconhecido '{t.value}' na linha {t.lexer.lineno}",
-              file=sys.stderr)
+        print(f"[LEXER] Erro: operador desconhecido '{t.value}' na linha {t.lexer.lineno}", file=sys.stderr)
     return t
 
 
@@ -358,10 +354,11 @@ def t_ID(t):
     r'[A-Za-z][A-Za-z0-9_]*'
     # Identificadores em Fortran 77 têm máx. 6 caracteres,
     val = t.value.upper()
-    if len(val) > 6:
+
+    if val not in keywords and len(val) > 6:
         # Emite-se só aviso
-        print(f"[LEXER] Aviso: identificador '{val}' excede 6 caracteres (linha {t.lexer.lineno})",
-              file=sys.stderr)
+        print(f"[LEXER] Aviso: identificador '{val}' excede 6 caracteres (linha {t.lexer.lineno})", file=sys.stderr)
+
     # Verificar se é palavra-chave
     t.type = keywords.get(val, 'ID')
     t.value = val
@@ -389,10 +386,8 @@ def t_string_END(t):
 
 def t_string_NEWLINE(t):
     r'\n'
-    # String não fechada até ao fim da linha — erro em F77 standard
-    global _string_buffer
-    print(f"[LEXER] Erro: string não terminada na linha {_string_start_line}",
-          file=sys.stderr)
+    # String não fechada até ao fim da linha — erro
+    print(f"[LEXER] Erro: string não terminada na linha {_string_start_line}", file=sys.stderr)
     t.lexer.lineno += 1
     t.lexer.begin('INITIAL')
 
@@ -411,14 +406,12 @@ t_string_ignore = ''
 # ------------------------------------------ ERROS ------------------------------------------ #
 
 def t_error(t):
-    print(f"[LEXER] Erro: carácter ilegal '{t.value[0]}' na linha {t.lexer.lineno}",
-          file=sys.stderr)
+    print(f"[LEXER] Erro: carácter ilegal '{t.value[0]}' na linha {t.lexer.lineno}", file=sys.stderr)
     t.lexer.skip(1)
 
 
 def t_string_error(t):
-    print(f"[LEXER] Erro (string): carácter inesperado '{t.value[0]}' na linha {t.lexer.lineno}",
-          file=sys.stderr)
+    print(f"[LEXER] Erro (string): carácter inesperado '{t.value[0]}' na linha {t.lexer.lineno}", file=sys.stderr)
     t.lexer.skip(1)
 
 
@@ -468,5 +461,4 @@ def tokenize(source: str, filename: str = '<stdin>') -> list:
 def tokenize_file(path: str) -> list:
     """Lê um ficheiro Fortran 77 e tokeniza-o."""
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
-        source = f.read()
-    return tokenize(source, filename=path)
+        return tokenize(f.read())
