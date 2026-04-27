@@ -1,105 +1,136 @@
-import sys, os
-import glob
-from collections import Counter
+import sys, os, argparse
+from compiler import run_lexer # , run_parser, run_semantic, run_codegen
 
-# importar o lexer criado
-try:
-    from lexer import tokenize_file
-except ImportError:
-    print("Erro: não foi possível importar 'lexer.py'.")
-    sys.exit(1)
+# --------------------------------------------- Utilitários --------------------------------------------- #
+
+def fail(message: str, code: int = 1):
+    print(f"Erro: {message}", file=sys.stderr)
+    sys.exit(code)
 
 
-def format_token(tok) -> str:
-    if tok.type == 'STR_LITERAL':
-        val_str = f"'{tok.value}'"
-    elif tok.type == 'NEWLINE':
-        val_str = '↵'
-    else:
-        val_str = str(tok.value)
-
-    line_str = f"L{tok.lineno:>4}"
-    return f"  {line_str}  {tok.type:<15}  {val_str}"
+def ensure_file_exists(path: str):
+    if not os.path.isfile(path):
+        fail(f"ficheiro não encontrado: {path}")
 
 
-def print_tokens(tokens: list, verbose: bool = True, summary: bool = False):
-    if verbose:
-        print("\nLINHA  TIPO             VALOR")
-        print("  " + "─" * 55)
-        for tok in tokens:
-            print(format_token(tok))
-
-    if summary or not verbose:
-        print()
-        counts = Counter(tok.type for tok in tokens)
-        total = len(tokens)
-        print(f"Resumo: {total} tokens")
-        print("  " + "─" * 40)
-        for token_type, count in sorted(counts.items(), key=lambda x: -x[1]):
-            bar = '█' * min(count, 30)
-            print(f"  {token_type:<15}  {count:>4}  {bar}")
-
-
-# Testar um único ficheiro
-def test_file(path: str, verbose: bool, summary: bool) -> bool:
-    print()
+def print_header(title: str):
     print("=" * 60)
-    print(f"Ficheiro: {path}")
+    print(title)
     print("=" * 60)
 
-    try:
-        tokens = tokenize_file(path)
-    except FileNotFoundError:
-        print(f"Erro: ficheiro não encontrado: {path}")
-        return False
-    except Exception as e:
-        print(f"Erro inesperado: {e}")
-        return False
+# --------------------------------------------- Execução das Fases --------------------------------------------- #
 
-    if not tokens:
-        print("Aviso: nenhum token produzido")
-        return True
 
-    print_tokens(tokens, verbose=verbose, summary=summary)
-    return True
+def execute_lexer(path: str, summary: bool):
+    result = run_lexer(path)
 
+    if not result:
+        print("Nenhum token produzido.")
+        return
+
+    if summary:
+        print(f"Total de tokens: {len(result)}")
+        return
+
+    for tok in result:
+        print(tok)
+
+
+'''
+def execute_parser(path: str):
+    result = run_parser(path)
+
+    if result is None:
+        print("Parsing concluído sem output.")
+        return
+
+    print(result)
+
+
+def execute_semantic(path: str):
+    result = run_semantic(path)
+
+    if result is None:
+        print("Análise semântica concluída sem output.")
+        return
+
+    print(result)
+
+
+def execute_codegen(path: str):
+    result = run_codegen(path)
+
+    if result is None:
+        print("Geração de código concluída sem output.")
+        return
+
+    print(result)
+'''
+# --------------------------------------------- Argparse --------------------------------------------- #
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="main.py",
+        description="Compilador Fortran 77 — PL2026",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+
+    parser.add_argument(
+        "phase",
+        choices=["lex", "parse", "sem", "codegen"],
+        help=(
+            "fase a executar:\n"
+            "  lex      Executa (apenas) o lexer (análise léxica)\n"
+            "  parse    Executa o lexer e depois o parser (análise sintática)\n"
+            "  sem      Executa o lexer, o parser e depois a análise semântica\n"
+            "  codegen  Executa todos os passos da compilação, terminando com a tradução/geração de código"
+        )
+    )
+
+    parser.add_argument(
+        "file",
+        help="ficheiro fonte Fortran (.f)"
+    )
+
+    parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="modo resumido (atualmente útil em lex)"
+    )
+
+    return parser
+
+# --------------------------------------------- Main --------------------------------------------- #
 
 def main():
-    print("\nLexer Fortran 77 — PL2026")
+    parser = build_parser()
+    args = parser.parse_args()
 
-    if len(sys.argv) == 1:
-        paths = glob.glob("tests/**/*", recursive=True)
-        paths = [p for p in paths if not p.endswith("/")]
+    ensure_file_exists(args.file)
 
-        if not paths:
-            print("Nenhum ficheiro encontrado em tests/")
-            sys.exit(1)
+    print_header("Compilador Fortran 77 — PL2026")
 
-    elif len(sys.argv) == 2:
-        path = sys.argv[1]
+    try:
+        if args.phase == "lex":
+            execute_lexer(args.file, args.summary)
 
-        if not path.startswith("tests/"):
-            path = f"tests/{path}"
+        '''
+        elif args.phase == "parse":
+            execute_parser(args.file)
 
-        if not os.path.isfile(path):
-            print(f"Ficheiro não encontrado: {path}")
-            sys.exit(1)
+        elif args.phase == "sem":
+            execute_semantic(args.file)
 
-        paths = [path]
+        elif args.phase == "codegen":
+            execute_codegen(args.file)
+        '''
 
-    else:
-        print("Uso:")
-        print(f"\t{sys.argv[0]}                 -> todos os testes")
-        print(f"\t{sys.argv[0]} ficheiro.f      -> um teste")
-        sys.exit(1)
+    except KeyboardInterrupt:
+        fail("execução interrompida", 130)
 
-    all_ok = True
-    for path in paths:
-        ok = test_file(path, verbose=True, summary=True)
-        all_ok = all_ok and ok
-
-    sys.exit(0 if all_ok else 1)
+    except Exception as e:
+        fail(str(e), 1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
