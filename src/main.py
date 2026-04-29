@@ -1,7 +1,7 @@
 import sys, os, argparse
-from compiler import run_lexer # , run_parser, run_semantic, run_codegen
+from compiler import run_lexer, run_parser # , run_semantic, run_codegen
 
-# --------------------------------------------- Utilitários --------------------------------------------- #
+# --------------------------------------------- Utils --------------------------------------------- #
 
 def fail(message: str, code: int = 1):
     print(f"Erro: {message}", file=sys.stderr)
@@ -20,7 +20,6 @@ def print_header(title: str):
 
 # --------------------------------------------- Execução das Fases --------------------------------------------- #
 
-
 def execute_lexer(path: str, summary: bool):
     result = run_lexer(path)
 
@@ -36,7 +35,6 @@ def execute_lexer(path: str, summary: bool):
         print(tok)
 
 
-'''
 def execute_parser(path: str):
     result = run_parser(path)
 
@@ -46,7 +44,7 @@ def execute_parser(path: str):
 
     print(result)
 
-
+'''
 def execute_semantic(path: str):
     result = run_semantic(path)
 
@@ -95,7 +93,7 @@ def build_parser():
     parser.add_argument(
         "--summary",
         action="store_true",
-        help="modo resumido (atualmente útil em lex)"
+        help="modo resumido"
     )
 
     return parser
@@ -114,10 +112,11 @@ def main():
         if args.phase == "lex":
             execute_lexer(args.file, args.summary)
 
-        '''
+
         elif args.phase == "parse":
             execute_parser(args.file)
 
+        '''
         elif args.phase == "sem":
             execute_semantic(args.file)
 
