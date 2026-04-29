@@ -1,3 +1,5 @@
+# Fase 1 - Análise Léxica
+
 import ply.lex as lex
 import re
 import sys
