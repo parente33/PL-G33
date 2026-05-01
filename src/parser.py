@@ -2,6 +2,8 @@
 
 import ply.yacc as yacc
 import sys
+from lexer import tokens
+
 from ast_nodes import *
 
 # ------------------------------------------ Precedência de Operadores ------------------------------------------ #
@@ -366,15 +368,28 @@ def p_arg_list_empty(p):
 # ------------------------------------------ Expressões ------------------------------------------ #
 
 def p_expr_binop_arith(p):
-    """ expr : expr PLUS  expr | expr MINUS expr | expr STAR  expr | expr SLASH expr | expr DSTAR expr | expr DSLASH expr """
+    """ expr : expr PLUS  expr
+             | expr MINUS expr
+             | expr STAR  expr
+             | expr SLASH expr
+             | expr DSTAR expr
+             | expr DSLASH expr """
     p[0] = BinOp(left=p[1], op=p[2], right=p[3], lineno=p.lineno(2))
 
 def p_expr_binop_relational(p):
-    """ expr : expr OP_EQ expr | expr OP_NE expr | expr OP_LT expr | expr OP_LE expr | expr OP_GT expr | expr OP_GE expr """
+    """ expr : expr OP_EQ expr
+             | expr OP_NE expr
+             | expr OP_LT expr
+             | expr OP_LE expr
+             | expr OP_GT expr
+             | expr OP_GE expr """
     p[0] = BinOp(left=p[1], op=p[2], right=p[3], lineno=p.lineno(2))
 
 def p_expr_binop_logical(p):
-    """ expr : expr OP_AND  expr | expr OP_OR   expr | expr OP_EQV  expr | expr OP_NEQV expr """
+    """ expr : expr OP_AND  expr
+             | expr OP_OR   expr
+             | expr OP_EQV  expr
+             | expr OP_NEQV expr """
     p[0] = BinOp(left=p[1], op=p[2], right=p[3], lineno=p.lineno(2))
 
 def p_expr_unary_minus(p):
@@ -427,11 +442,13 @@ def p_expr_logical_false(p):
 # ------------------------------------------ Newlines ------------------------------------------ #
 
 def p_newlines(p):
-    """ newlines : NEWLINE | newlines NEWLINE """
+    """ newlines : NEWLINE
+                 | newlines NEWLINE """
     pass   # apenas consumir; sem valor semântico
 
 def p_newlines_opt(p):
-    """ newlines_opt : newlines | """
+    """ newlines_opt : newlines
+                     | """
     pass
 
 
