@@ -23,7 +23,7 @@ def preprocess_fixed_form(source: str) -> list[tuple[int, str]]:
     i = 0
     while i < len(lines):
         raw = lines[i]
-        lineon = i + 1
+        lineno = i + 1
 
         raw = raw.rstrip('\r\n')
         raw = raw[:72]              # ignorar a partir da 73ª coluna
@@ -49,17 +49,20 @@ def preprocess_fixed_form(source: str) -> list[tuple[int, str]]:
 
         # Linha normal: extrai-se colunas 7-72 como código
         # Colunas 2-5: label, trata-se em separado
-        label = raw[1:5].strip() if len(raw) >= 5 else ''
+        label = raw[0:5].strip() if len(raw) >= 5 else ''
         code = raw[6:] if len(raw) > 6 else ''
 
         # Inline comentários com '!', remover tudo que não esteja dentro de uma string
         code = remove_inline_comment(code)
 
+        # Converter para maiúsculas fora de strings
+        code = uppercase_code(code)
+
         # Reconstruir linha com label (se existir) para o lexer ver o label como token
         if label.isdigit():
-            logical_lines.append((lineon, f"{label} {code}"))
+            logical_lines.append((lineno, f"{label} {code}"))
         else:
-            logical_lines.append((lineon, code))
+            logical_lines.append((lineno, code))
 
         i += 1
 
@@ -69,16 +72,57 @@ def preprocess_fixed_form(source: str) -> list[tuple[int, str]]:
 def remove_inline_comment(code: str) -> str:
     """
     Remove comentários inline (marcados sempre após um '!') respeitando strings definidas
+    Trata também corretamente sequências '' (ex: 'abc''def' ! comentário -> 'abc''def')
     """
 
     in_string = False
-    for idx, ch in enumerate(code):
-        if ch == "'":
-            in_string = not in_string
-        elif ch == '!' and not in_string:
-            return code [:idx]
-
+    i = 0
+    while i < len(code):
+        ch = code[i]
+        if in_string:
+            if ch == "'" and i + 1 < len(code) and code[i + 1] == "'":
+                i += 2          # '' dentro de string → aspa literal, avançar 2
+                continue
+            elif ch == "'":
+                in_string = False
+        else:
+            if ch == "'":
+                in_string = True
+            elif ch == '!':
+                return code[:i]
+        i += 1
     return code
+
+
+def uppercase_code(code: str) -> str:
+    """
+    Converte o código para maiúsculas respeitando strings entre aspas simples. Tudo fora de strings é convertido; o conteúdo das strings é preservado.
+
+    Necessário porque o lexer depende de maiúsculas (apesar do Fortran ser case-insensitive...); Mais simples fazer aqui tudo do que cada regra ser case-insensitive
+    """
+    result = []
+    in_string = False
+    i = 0
+    while i < len(code):
+        ch = code[i]
+        if in_string:
+            if ch == "'" and i + 1 < len(code) and code[i + 1] == "'":
+                result.append("''")     # '' escapado: preservar sem conversão
+                i += 2
+                continue
+            elif ch == "'":
+                in_string = False
+                result.append(ch)
+            else:
+                result.append(ch)       # conteúdo da string: preservar
+        else:
+            if ch == "'":
+                in_string = True
+                result.append(ch)
+            else:
+                result.append(ch.upper())
+        i += 1
+    return ''.join(result)
 
 
 def join_logical_lines(logical_lines: list[tuple[int, str]]) -> str:
@@ -113,12 +157,12 @@ keywords = {
     'THEN'          : 'THEN',
     'ELSE'          : 'ELSE',
     'ELSEIF'        : 'ELSEIF',
+    'ENDIF'         : 'ENDIF',
     'DO'            : 'DO',
     'CONTINUE'      : 'CONTINUE',
     'GOTO'          : 'GOTO',
-    'ENDIF'         : 'ENDIF',
 
-    # I/0
+    # I/O
     'READ'          : 'READ',
     'WRITE'         : 'WRITE',
     'PRINT'         : 'PRINT',
@@ -199,7 +243,6 @@ tokens = (
 
         # Especial
         'NEWLINE',          # \n (fim de instrução lógica)
-        'AMPERSAND'         # & (continuação em formato livre)
     ]
 )
 
@@ -217,13 +260,6 @@ _string_start_line = 0
 
 # ------------------------------------------ ESTADO NORMAL ------------------------------------------ #
 
-def t_COMMENT(t):
-    r'![^\n]*'
-    # Comentários inline com '!': ignorar (já tratados no pré-processador,
-    # mas podem aparecer se o user não usar o formato fixo)
-    pass
-
-
 def t_LABEL(t):
     r'^\d+'
     t.value = int(t.value)
@@ -233,7 +269,6 @@ def t_LABEL(t):
 def t_NEWLINE(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
-    t.lexer.at_line_start = True
     return t
 
 
@@ -323,9 +358,8 @@ def t_SEMICOLON(t):
     return t
 
 
-def t_AMPERSAND(t):
-    r'&'
-    return t
+def t_DOT(t):
+    r'\.'
 
 
 def t_DOLLAR(t):
@@ -349,11 +383,12 @@ def t_DOT_OPERATOR(t):
     else:
         # Operador desconhecido da forma .XYZ.
         print(f"[LEXER] Erro: operador desconhecido '{t.value}' na linha {t.lexer.lineno}", file=sys.stderr)
-    return t
+    t.lexer.skip(len(t.value))
+    return None
 
 
 def t_ID(t):
-    r'[A-Za-z][A-Za-z0-9_]*'
+    r'[A-Za-z][A-Za-z0-9]*'
     # Identificadores em Fortran 77 têm máx. 6 caracteres,
     val = t.value.upper()
 
