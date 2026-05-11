@@ -358,11 +358,6 @@ def t_SEMICOLON(t):
     return t
 
 
-def t_DOT(t):
-    r'\.'
-    return t
-
-
 def t_DOLLAR(t):
     r'\$'
     return t
@@ -386,6 +381,11 @@ def t_DOT_OPERATOR(t):
         print(f"[LEXER] Erro: operador desconhecido '{t.value}' na linha {t.lexer.lineno}", file=sys.stderr)
     t.lexer.skip(len(t.value))
     return None
+
+
+def t_DOT(t):
+    r'\.'
+    return t
 
 
 def t_ID(t):
