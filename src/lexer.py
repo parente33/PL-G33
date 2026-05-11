@@ -360,6 +360,7 @@ def t_SEMICOLON(t):
 
 def t_DOT(t):
     r'\.'
+    return t
 
 
 def t_DOLLAR(t):
