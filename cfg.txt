@@ -1,0 +1,151 @@
+====================================
+======= Context-Free Grammar =======
+====================================
+
+program_file
+    : program_units
+
+program_units
+    : program_unit
+    | program_units program_unit
+
+program_unit
+    : PROGRAM ID newlines declarations body END newlines_opt
+    | declarations body END newlines_opt
+    | type_spec FUNCTION ID LPAREN param_list RPAREN newlines declarations body END newlines_opt
+    | FUNCTION ID LPAREN param_list RPAREN newlines declarations body END newlines_opt
+    | SUBROUTINE ID LPAREN param_list RPAREN newlines declarations body END newlines_opt
+    | SUBROUTINE ID newlines declarations body END newlines_opt
+
+===================================================================================================================
+Nota: "declarations body END newlines_opt" é necessária porque F77 permite que PROGRAM seja omitido.
+Não cria conflito FIRST/FIRST porque nenhuma das outras alternativas começa por type_spec ou FUNCTION/SUBROUTINE:
+as declarações começam por type_spec, mas a produção "declarations -> ε" permite que o parser avance para 'body',
+cujo FIRST inclui os statements executáveis, que são distintos de FUNCTION/SUBROUTINE
+===================================================================================================================
+
+param_list
+    : ε
+    | ID
+    | param_list COMMA ID
+
+declarations
+    : ε
+    | declarations declaration
+
+declaration
+    : type_spec declarator_list newlines
+    | IMPLICIT NONE newlines
+    | PARAMETER LPAREN param_assign_list RPAREN newlines
+
+param_assign_list
+    : ID EQUALS expr
+    | param_assign_list COMMA ID EQUALS expr
+
+type_spec
+    : INTEGER
+    | REAL
+    | LOGICAL
+    | CHARACTER
+    | COMPLEX
+    | DOUBLE PRECISION
+
+declarator_list
+    : declarator
+    | declarator_list COMMA declarator
+
+declarator
+    : ID
+    | ID LPAREN DIM_LIST RPAREN
+
+dim_list
+    : expr
+    | dim_list COMMA expr
+
+body
+    : ε
+    | body statement
+
+statement
+    : INT_LITERAL stmt newlines
+    | stmt newlines
+    | newlines
+
+stmt
+    : lvalue EQUALS expr
+    | IF LPAREN expr RPAREN THEN newlines body elseif_clauses else_clauses ENDIF
+    | IF LPAREN expr RPAREN stmt
+    | IF LPAREN expr RPAREN INT_LITERAL COMMA INT_LITERAL COMMA INT_LITERAL
+    | DO INT_LITERAL ID EQUALS expr COMMA expr
+    | DO INT_LITERAL ID EQUALS expr COMMA expr COMMA expr
+    | CONTINUE
+    | GOTO INT_LITERAL
+    | CALL ID LPAREN arg_list RPAREN
+    | CALL ID
+    | RETURN
+    | RETURN expr
+    | STOP
+    | STOP INT_LITERAL
+    | PRINT STAR COMMA io_list
+    | PRINT STAR
+    | PRINT INT_LITERAL COMMA io_list
+    | READ STAR COMMA io_list
+    | READ INT_LITERAL COMMA io_list
+
+elseif_clauses
+    : ε
+    | elseif_clauses ELSEIF LPAREN expr RPAREN THEN newlines body
+
+else_clauses
+    : ε
+    | elseif_clauses ELSEIF LPAREN expr RPAREN THEN newlines body
+
+lvalue
+    : ID
+    | ID LPAREN arg_list RPAREN
+
+io_list
+    : expr
+    | io_list COMMA expr
+
+arg_list
+    : ε
+    | expr
+    | arg_list COMMA expr
+
+expr:
+    : expr OP_EQV expr
+    | expr OP_NEQV expr
+    | expr OP_OR expr
+    | expr OP_AND expr
+    | expr OP_EQ expr
+    | expr OP_NE expr
+    | expr OP_LT expr
+    | expr OP_LE expr
+    | expr OP_GT expr
+    | expr OP_GE expr
+    | expr DSLASH expr
+    | expr PLUS expr
+    | expr MINUS expr
+    | expr STAR expr
+    | expr SLASH expr
+    | expr DSTAR expr
+    | MINUS expr
+    | PLUS expr
+    | OP_NOT expr
+    | LPAREN expr RPAREN
+    | ID LPAREN arg_list RPAREN
+    | ID
+    | INT_LITERAL
+    | REAL_LITERAL
+    | STR_LITERAL
+    | LOGICAL_TRUE
+    | LOGICAL_FALSE
+
+newlines
+    : NEWLINE
+    | newlines NEWLINE
+
+newlines_opt
+    : newlines
+    | ε
