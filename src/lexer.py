@@ -379,8 +379,8 @@ def t_DOT_OPERATOR(t):
     else:
         # Operador desconhecido da forma .XYZ.
         print(f"[LEXER] Erro: operador desconhecido '{t.value}' na linha {t.lexer.lineno}", file=sys.stderr)
-    t.lexer.skip(len(t.value))
-    return None
+        return None
+    return t
 
 
 def t_DOT(t):
@@ -499,4 +499,5 @@ def tokenize(source: str, filename: str = '<stdin>') -> list:
 def tokenize_file(path: str) -> list:
     """Lê um ficheiro Fortran 77 e tokeniza-o."""
     with open(path, 'r', encoding='utf-8', errors='replace') as f:
-        return tokenize(f.read())
+        source = f.read()
+    return tokenize(source, filename=path)
