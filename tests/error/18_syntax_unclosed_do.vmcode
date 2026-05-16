@@ -1,0 +1,20 @@
+// Apesar de ter dado erro sintático, como é recuperável (ao contrário dos outros), não se impede o programa de criar o respetivo código máquina
+START
+PUSHN 1
+PUSHI 1
+STOREG 0
+DO1:
+PUSHG 0
+PUSHI 5
+INFEQ
+JZ F102
+PUSHG 0
+WRITEI
+WRITELN
+PUSHG 0
+PUSHI 1
+ADD
+STOREG 0
+JUMP DO1
+F102:
+STOP
