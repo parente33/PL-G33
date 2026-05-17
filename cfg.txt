@@ -56,7 +56,7 @@ declarator_list
 
 declarator
     : ID
-    | ID LPAREN DIM_LIST RPAREN
+    | ID LPAREN dim_list RPAREN
 
 dim_list
     : expr
@@ -73,7 +73,7 @@ statement
 
 stmt
     : lvalue EQUALS expr
-    | IF LPAREN expr RPAREN THEN newlines body elseif_clauses else_clauses ENDIF
+    | IF LPAREN expr RPAREN THEN newlines body elseif_clauses else_clause ENDIF
     | IF LPAREN expr RPAREN stmt
     | IF LPAREN expr RPAREN INT_LITERAL COMMA INT_LITERAL COMMA INT_LITERAL
     | DO INT_LITERAL ID EQUALS expr COMMA expr
@@ -96,9 +96,9 @@ elseif_clauses
     : ε
     | elseif_clauses ELSEIF LPAREN expr RPAREN THEN newlines body
 
-else_clauses
+else_clause
     : ε
-    | elseif_clauses ELSEIF LPAREN expr RPAREN THEN newlines body
+    | ELSE newlines body
 
 lvalue
     : ID
