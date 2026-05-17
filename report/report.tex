@@ -1,0 +1,795 @@
+\documentclass[a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tikz}
+\usepackage{listings}
+\usepackage{xcolor, colortbl}
+\usepackage{textcomp}
+\usepackage{float}
+\usepackage[colorlinks=true,urlcolor=blue,linkcolor=black]{hyperref}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+\usepackage{fancyhdr}
+\usepackage{longtable}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{tocloft}
+\usepackage{mdframed}
+\usepackage{fontawesome5}
+\usepackage{pdfpages}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\geometry{top=3cm}
+\setlength{\headheight}{2.5cm}
+\pagestyle{fancy}
+\fancyhf{}
+
+\fancyhead[L]{%
+    \begin{minipage}[b]{1.1\textwidth}
+        \includegraphics[height=1.5cm]{logo.jpg} \\
+        \vspace{0.1cm}
+        \large Licenciatura em Engenharia Informática -- Universidade do Minho
+    \end{minipage}
+}
+
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ================================================================ 
+% Code listing styles 
+% ================================================================
+\lstset{
+  inputencoding=utf8,
+  extendedchars=true
+}
+\lstdefinestyle{py}{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries\color{blue!70!black},
+    commentstyle=\itshape\color{gray},
+    stringstyle=\color{red!60!black},
+    numbers=none,
+    frame=single,
+    breaklines=true,
+    tabsize=4,
+    showstringspaces=false,
+}
+\lstdefinestyle{f77}{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries\color{blue!70!black},
+    commentstyle=\itshape\color{gray},
+    stringstyle=\color{red!60!black},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    columns=fixed,
+    keepspaces=true
+}
+\lstdefinestyle{vm}{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\bfseries\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+}
+
+\title{
+    \textbf{Processamento de Linguagens -- Trabalho Prático}
+    \vspace{0.5cm}
+    \parbox{1\textwidth}{
+        \centering
+        \large Construção de um compilador para Fortran 77
+    }
+    \vspace{0.8cm}
+}
+
+\author{
+    \begin{tabular}{ll}
+        André Dinis Alves Santos  & a106854 \\
+        Daniel Gonçalves Parente & a107363 \\
+        Pedro Francisco Ferreira & a107292
+    \end{tabular}
+}
+\date{Ano Letivo 2025/2026}
+
+\begin{document}
+
+\begin{titlepage}
+    \thispagestyle{empty}
+    \vfill
+    \maketitle
+    \vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ================================================================
+\section*{1. Introdução}
+\addcontentsline{toc}{section}{1. Introdução}
+% ================================================================
+
+\noindent O presente documento descreve o desenvolvimento de um compilador para a linguagem Fortran 77, no âmbito da unidade curricular de Processamento de Linguagens do ano letivo 2025/2026.
+
+\vspace{0.2cm}
+
+\noindent O compilador foi implementado em Python, recorrendo à biblioteca \texttt{PLY} (\textit{Python Lex-Yacc}) para a análise léxica e sintática. O sistema traduz código-fonte Fortran 77 diretamente para código da máquina virtual disponibilizada no contexto da unidade curricular, sem recorrer a uma representação intermédia.
+
+\vspace{0.2cm}
+
+\noindent O compilador está organizado em quatro fases sequenciais: análise léxica, análise sintática, análise semântica e geração de código. Cada fase é implementada num módulo Python independente, o que facilita a manutenção e a extensão do sistema.
+
+\vspace{0.2cm}
+
+\noindent As funcionalidades implementadas cobrem integralmente os requisitos mínimos do enunciado, incluindo declaração de tipos e variáveis (escalares e arrays), expressões aritméticas, lógicas e relacionais, estruturas de controlo de fluxo (\texttt{IF-THEN-ELSEIF-ELSE}, ciclos \texttt{DO}, \texttt{GOTO}), operações de I/O básicas (\texttt{READ}, \texttt{PRINT}) e, também a definição e chamada de subprogramas (\texttt{FUNCTION} e \texttt{SUBROUTINE}).
+
+% ================================================================
+\section*{2. Arquitetura}
+\addcontentsline{toc}{section}{2. Arquitetura}
+% ================================================================
+
+\noindent O compilador segue uma arquitetura de \textit{pipeline} linear, onde a saída de cada fase é a entrada da seguinte. A figura~\ref{fig:pipeline} ilustra o fluxo completo.
+
+\begin{figure}[H]
+\centering
+
+\begin{tikzpicture}[node distance=0.55cm,box/.style={rectangle,draw,rounded corners=3pt,minimum width=3.2cm,minimum height=0.95cm,font=\small,align=center},arr/.style={-{Stealth[length=5pt]}, thick},lbl/.style={font=\footnotesize\itshape,text=gray,align=center}]
+
+\node[box, fill=blue!10]   (src) {Ficheiro\\Fortran (.f)};
+\node[box, fill=orange!20, below=of src] (pre) {Pré-\\processamento};
+\node[box, fill=yellow!30, below=of pre] (lex) {Análise\\Léxica};
+\node[box, fill=green!20, below=of lex] (par) {Análise\\Sintática};
+\node[box, fill=teal!15, below=of par] (sem) {Análise\\Semântica};
+\node[box, fill=red!15, below=of sem] (cg) {Geração\\de Código};
+\node[box, fill=blue!10, below=of cg] (out) {Código VM};
+
+\draw[arr] (src) -- (pre);
+\draw[arr] (pre) -- (lex);
+\draw[arr] (lex) -- (par);
+\draw[arr] (par) -- (sem);
+\draw[arr] (sem) -- (cg);
+\draw[arr] (cg) -- (out);
+
+\node[lbl, right=0.25cm of pre] {linhas\\lógicas};
+\node[lbl, right=0.25cm of lex] {tokens};
+\node[lbl, right=0.25cm of par] {AST};
+\node[lbl, right=0.25cm of sem] {AST +\\tabelas};
+
+\end{tikzpicture}
+
+\caption{Pipeline de compilação.}
+\label{fig:pipeline}
+
+\end{figure}
+
+\noindent Os módulos Python que implementam cada fase são os seguintes:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Módulo} & \textbf{Responsabilidade} \\
+\midrule
+\texttt{lexer.py}         & Pré-processamento e análise léxica \\
+\texttt{parser.py}        & Análise sintática e construção da AST \\
+\texttt{ast\_nodes.py}    & Definição dos nós da AST \\
+\texttt{semantic.py}      & Análise semântica \\
+\texttt{symbol\_table.py} & Tabela de símbolos e inferência de tipos \\
+\texttt{codegen.py}       & Geração de código para a VM \\
+\texttt{compiler.py}      & Fachada que compõe as fases \\
+\texttt{main.py}          & Interface de linha de comandos \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent O módulo \texttt{compiler.py} funciona como fachada: expõe as funções \texttt{run\_lexer}, \texttt{run\_parser}, \texttt{run\_semantic} e \texttt{run\_codegen} que compõem as fases necessárias de forma transparente. O \texttt{main.py} usa estas funções para implementar a interface de linha de comandos descrita na secção~\ref{sec:manual}.
+
+% ================================================================
+\section*{3. Pré-Processamento}
+\addcontentsline{toc}{section}{3. Pré-Processamento}
+% ================================================================
+
+\noindent O Fortran 77 usa um formato de colunas fixas (\textit{fixed-form}) herdado da era dos cartões perfurados, com uma semântica de colunas rígida:
+
+\begin{center}
+\begin{tabular}{cl}
+\toprule
+\textbf{Coluna(s)} & \textbf{Significado} \\
+\midrule
+1       & \texttt{C}, \texttt{c}, \texttt{*} ou \texttt{!} iniciam uma linha de comentário completa \\
+2--5    & Label numérico opcional \\
+6       & Carácter diferente de espaço ou \texttt{0} indica continuação da linha anterior \\
+7--72   & Código executável \\
+73+     & Ignoradas \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent O pré-processamento é implementado na função \texttt{preprocess\_fixed\_form} do módulo \texttt{lexer.py}. Recebe o código-fonte como uma \textit{string} e devolve uma lista de tuplos \texttt{(numero\_linha\_original, conteudo\_logico)}, onde cada linha lógica já incorpora as suas continuações físicas e tem os comentários removidos. A preservação do número de linha original é crucial para que as mensagens de erro refiram a linha correta no ficheiro fonte.
+
+\vspace{0.2cm}
+
+\noindent O processamento de cada linha física segue estes passos:
+
+\begin{enumerate}
+    \item Truncar ao carácter 72 (colunas 73+ ignoradas);
+    \item Identificar e descartar linhas de comentário (coluna 1 igual a \texttt{C}, \texttt{c}, \texttt{*} ou \texttt{!});
+    \item Identificar linhas de continuação (coluna 6 não-espaço) e concatenar as colunas 7--72 à linha lógica anterior;
+    \item Remover comentários \textit{inline} (marcados por \texttt{!} fora de strings);
+    \item Converter o código para maiúsculas, preservando o conteúdo das strings.
+\end{enumerate}
+
+\noindent O passo 5 merece atenção especial. Fortran 77 é \textit{case-insensitive}, mas o lexer trabalha apenas com maiúsculas por simplicidade. A conversão é feita carácter a carácter com uma máquina de estados simples que distingue se o cursor está dentro ou fora de uma string delimitada por aspas simples. As sequências \texttt{''} (aspas escapadas dentro de strings) são reconhecidas e tratadas corretamente em ambas as funções \texttt{remove\_inline\_comment} e \texttt{uppercase\_code}. Esta abordagem centralizada garante uniformidade e evita duplicar lógica \textit{case-insensitive} nas regras do lexer.
+
+\vspace{0.2cm}
+
+\noindent Após o pré-processamento, \texttt{join\_logical\_lines} une todas as linhas lógicas numa única \textit{string} separadas por \texttt{\textbackslash{}n}, que é então entregue ao lexer. Os labels numéricos das colunas 2--5 são antecedidos ao conteúdo da linha de forma a serem visíveis ao lexer como \texttt{INT\_LITERAL} no início da linha.
+
+% ================================================================
+\section*{4. Análise Léxica}
+\addcontentsline{toc}{section}{4. Análise Léxica}
+% ================================================================
+
+\noindent A análise léxica é implementada com \texttt{ply.lex} no módulo \texttt{lexer.py}. O lexer reconhece os seguintes tipos de tokens:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Categoria} & \textbf{Tokens} \\
+\midrule
+Palavras-chave         & \texttt{PROGRAM}, \texttt{END}, \texttt{IF}, \texttt{DO}, \texttt{INTEGER}, \texttt{REAL}, \ldots (28 no total) \\
+Operadores relacionais & \texttt{OP\_EQ} (.EQ.), \texttt{OP\_NE}, \texttt{OP\_LT}, \texttt{OP\_LE}, \texttt{OP\_GT}, \texttt{OP\_GE} \\
+Operadores lógicos     & \texttt{OP\_AND}, \texttt{OP\_OR}, \texttt{OP\_NOT}, \texttt{OP\_EQV}, \texttt{OP\_NEQV} \\
+Literais lógicos       & \texttt{LOGICAL\_TRUE} (.TRUE.), \texttt{LOGICAL\_FALSE} (.FALSE.) \\
+Literais               & \texttt{INT\_LITERAL}, \texttt{REAL\_LITERAL}, \texttt{STR\_LITERAL}, \texttt{ID} \\
+Operadores aritméticos & \texttt{PLUS}, \texttt{MINUS}, \texttt{STAR}, \texttt{SLASH}, \texttt{DSTAR} (**), \texttt{DSLASH} (//) \\
+Delimitadores          & \texttt{LPAREN}, \texttt{RPAREN}, \texttt{COMMA}, \texttt{EQUALS}, \ldots \\
+Controlo               & \texttt{NEWLINE} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Ordem das regras.} Em PLY, a ordem das funções de tokenização determina a prioridade de correspondência. Isto obrigou a cuidado especial em dois casos:
+
+\begin{itemize}
+    \item \texttt{DSTAR} (\texttt{**}) e \texttt{DSLASH} (\texttt{//}) têm de ser reconhecidos \textit{antes} de \texttt{STAR} e \texttt{SLASH}, pois de contrário o lexer emitiria dois tokens simples em vez de um composto.
+    \item \texttt{REAL\_LITERAL} tem de ser reconhecido \textit{antes} de \texttt{INT\_LITERAL}, dado que qualquer número real começa por dígitos.
+\end{itemize}
+
+\paragraph{Operadores pontuados.} Os operadores da forma \texttt{.XYZ.} (relacionais, lógicos e literais booleanos) são todos capturados por uma única regra e depois classificados por consulta de dicionário:
+
+\vspace{0.2cm}
+
+\begin{lstlisting}[style=py]
+def t_DOT_OPERATOR(t):
+    r'\.[A-Za-z]+\.'
+    val = t.value.upper()
+    if val in relational_ops:
+        t.type = relational_ops[val]
+    elif val in logical_ops:
+        t.type = logical_ops[val]
+    elif val in logical_literals:
+        t.type = logical_literals[val]
+        t.value = (val == '.TRUE.')   # converte para bool Python
+    else:
+        print(f"[LEXER] Erro: operador desconhecido '{t.value}'", ...)
+        return None
+    return t
+\end{lstlisting}
+
+\vspace{0.2cm}
+
+\noindent Esta abordagem evita duplicar expressões regulares para cada operador pontuado.
+
+\paragraph{Literais de string e o estado \texttt{string}.} Em Fortran 77, strings são delimitadas por aspas simples, com \texttt{''} como sequência de escape para um apóstrofo literal. Para lidar com isto sem ambiguidade, o lexer usa um \textit{estado exclusivo} chamado \texttt{string}: ao encontrar uma aspa de abertura, transita para este estado e acumula o conteúdo num buffer global. Ao encontrar a aspa de fecho, emite o token \texttt{STR\_LITERAL} e regressa ao estado inicial. No estado \texttt{string}, nenhuma regra do estado normal interfere com o conteúdo, o que é essencial para preservar os caracteres originais sem os tratar como código.
+
+\paragraph{Recuperação de erros.} Em caso de carácter ilegal, o lexer emite uma mensagem e avança um carácter (\texttt{t.lexer.skip(1)}), permitindo reportar múltiplos erros num único passe.
+
+% ================================================================
+\section*{5. Análise Sintática}
+\addcontentsline{toc}{section}{5. Análise Sintática}
+% ================================================================
+
+\noindent A análise sintática é implementada com \texttt{ply.yacc} (parser LALR(1)) no módulo \texttt{parser.py}. O parser constrói uma AST cujos nós estão definidos em \texttt{ast\_nodes.py}.
+
+\subsection*{5.1 Gramática}
+
+\noindent A gramática completa é apresentada em documento separado (\texttt{cfg.txt}). As principais produções cobrem:
+
+\begin{itemize}
+    \item Um \textbf{ficheiro} como sequência de unidades de programa (\textit{program\_units});
+    \item Uma \textbf{unidade de programa} como programa principal (com ou sem \texttt{PROGRAM nome}), uma \texttt{FUNCTION} (com ou sem tipo de retorno explícito) ou uma \texttt{SUBROUTINE} (com ou sem lista de parâmetros);
+    \item As \textbf{declarações}, cobrindo declarações de tipo (\texttt{INTEGER X, Y(10)}), \texttt{IMPLICIT NONE} e \texttt{PARAMETER};
+    \item Os \textbf{statements}, cobrindo atribuição, \texttt{IF-THEN-ELSEIF-ELSE-ENDIF}, IF lógico de uma linha, IF aritmético (\texttt{IF (expr) l1,l2,l3}), \texttt{DO} com e sem passo, \texttt{GOTO}, \texttt{CALL} (com e sem parênteses), \texttt{RETURN} (com e sem valor), \texttt{STOP}, \texttt{PRINT} e \texttt{READ}.
+\end{itemize}
+
+\noindent A gramática permite ainda que \texttt{PROGRAM nome} seja omitido, o que o standard Fortran 77 autoriza. Esta alternativa não cria conflito FIRST/FIRST porque as declarações começam por \textit{type\_spec} e a produção \texttt{declarations $\rightarrow$ $\varepsilon$} permite ao parser avançar para o corpo, cujo FIRST é distinto de \texttt{FUNCTION}/\texttt{SUBROUTINE}.
+
+\paragraph{Ambiguidade FuncCall vs.\ Array.} Em Fortran 77, a sintaxe \texttt{F(args)} serve simultaneamente para chamar uma função e para indexar um array. O parser não consegue distingui-las sintaticamente e representa ambos os casos com o nó \texttt{FuncCall}. A distinção é adiada para a análise semântica, que consulta a tabela de símbolos para determinar se \texttt{F} é uma função ou um array.
+
+\subsection*{5.2 Precedência de Operadores}
+
+\noindent Em vez de introduzir níveis de não-terminais na gramática (o que tornaria as regras muito mais extensas), aproveitou-se o mecanismo de declaração de precedência do PLY. A tabela seguinte mostra os operadores ordenados do menos prioritário para o mais prioritário:
+
+\begin{center}
+\begin{tabular}{cll}
+\toprule
+\textbf{Nível} & \textbf{Associatividade} & \textbf{Operadores} \\
+\midrule
+1 & esquerda  & \texttt{.EQV.} \quad \texttt{.NEQV.} \\
+2 & esquerda  & \texttt{.OR.} \\
+3 & esquerda  & \texttt{.AND.} \\
+4 & direita   & \texttt{.NOT.} \\
+5 & não-assoc & \texttt{.EQ.} \quad \texttt{.NE.} \quad \texttt{.LT.} \quad \texttt{.LE.} \quad \texttt{.GT.} \quad \texttt{.GE.} \\
+6 & esquerda  & \texttt{//} (concatenação) \\
+7 & esquerda  & \texttt{+} \quad \texttt{-} \\
+8 & esquerda  & \texttt{*} \quad \texttt{/} \\
+9 & direita   & \texttt{**} (potência; direita: $2^{3^2} = 2^9$) \\
+10 & direita  & Unário \texttt{-} e \texttt{+} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.2cm}
+
+\noindent Esta hierarquia corresponde exatamente à especificada pelo standard Fortran 77.
+
+\subsection*{5.3 A AST}
+
+\noindent Todos os nós da AST herdam da classe base \texttt{Node} (em \texttt{ast\_nodes.py}), que disponibiliza um campo \texttt{lineno} e o método \texttt{accept(visitor)} para o padrão \textit{Visitor}. A raiz da AST é sempre um \texttt{ProgramFile} contendo uma lista de \texttt{Program} e/ou \texttt{Subprogram}. A hierarquia completa de nós é:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Categoria} & \textbf{Nós} \\
+\midrule
+Estrutura       & \texttt{ProgramFile}, \texttt{Program}, \texttt{Subprogram} \\
+Declarações     & \texttt{VarDecl}, \texttt{ArrayDecl}, \texttt{ImplicitNone}, \texttt{ParameterDecl} \\
+Statements      & \texttt{Assignment}, \texttt{IfThen}, \texttt{LogicalIf}, \texttt{ArithmeticIf} \\
+                & \texttt{DoLoop}, \texttt{Continue}, \texttt{Goto}, \texttt{Call} \\
+                & \texttt{Return}, \texttt{Stop}, \texttt{Print}, \texttt{Read}, \texttt{LabeledStmt} \\
+Expressões      & \texttt{BinOp}, \texttt{UnaryOp}, \texttt{FuncCall}, \texttt{Var} \\
+                & \texttt{IntLiteral}, \texttt{RealLiteral}, \texttt{StrLiteral}, \texttt{LogicalLiteral} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{5.4 Resolução de DO Loops (pós-processamento)}
+
+\noindent Em Fortran 77, o corpo de um ciclo \texttt{DO} termina no statement com o label indicado (tipicamente \texttt{CONTINUE}), sem delimitador explícito. Durante o \textit{parse}, o corpo de um \texttt{DO} não pode ser determinado imediatamente: os statements seguintes só se saberá que pertencem ao ciclo quando o label terminal for encontrado.
+
+\vspace{0.2cm}
+
+\noindent A solução adotada foi um pós-processamento. O parser produz uma lista plana de statements (com os \texttt{DoLoop} de corpo vazio), e \texttt{resolve\_do\_loops} percorre essa lista com uma pilha para agrupa-los corretamente:
+
+\vspace{0.2cm}
+
+\begin{lstlisting}[style=py]
+for stmt in stmts:
+    if isinstance(stmt, DoLoop):
+        stack.append((stmt, []))          # abrir novo loop
+    elif isinstance(stmt, LabeledStmt) and stack:
+        stack[-1][1].append(stmt)         # incluir no loop corrente
+        while stack and stack[-1][0].label == stmt.label:
+            do_loop, body = stack.pop()   # fechar o loop
+            do_loop.body = body
+            if stack:
+                stack[-1][1].append(do_loop)
+            else:
+                result.append(do_loop)
+    else:
+        if stack:
+            stack[-1][1].append(stmt)     # corpo do loop corrente
+        else:
+            result.append(stmt)
+\end{lstlisting}
+
+\vspace{0.2cm}
+
+\noindent O algoritmo suporta naturalmente ciclos aninhados (a pilha mantém um contexto por nível) e DO loops que partilham o mesmo label terminal. Se um DO loop nunca for fechado, é emitido um aviso e o loop é incluído na AST com o corpo recolhido até ao fim do âmbito, permitindo que a compilação prossiga.
+
+\paragraph{Recuperação de erros sintáticos.} A função \texttt{p\_error} descarta tokens até ao próximo \texttt{NEWLINE} e reinicia o parser, permitindo reportar múltiplos erros num único passe.
+
+% ================================================================
+\section*{6. Análise Semântica}
+\addcontentsline{toc}{section}{6. Análise Semântica}
+% ================================================================
+
+\noindent A análise semântica está implementada em \texttt{semantic.py} e \texttt{symbol\_table.py}. A classe \texttt{SemanticAnalyzer} percorre a AST verificando a coerência do programa e reportando diagnósticos através de objetos \texttt{Diagnostic}.
+
+\subsection*{6.1 Tabela de Símbolos}
+
+\noindent Cada unidade de programa tem a sua própria \texttt{SymbolTable}. Existe também uma tabela global (\texttt{global\_table}) que regista os subprogramas definidos no ficheiro, tornando-os visíveis em todo o programa. Após a análise, todas as tabelas locais são guardadas em \texttt{local\_tables} (dicionário indexado pelo nome do âmbito) para uso posterior pelo gerador de código, que precisa de conhecer os offsets de todos os símbolos.
+
+\vspace{0.2cm}
+
+\noindent Cada entrada na tabela é um objeto \texttt{Symbol} com os campos:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Campo} & \textbf{Descrição} \\
+\midrule
+\texttt{name}        & Nome em maiúsculas \\
+\texttt{kind}        & \texttt{variable}, \texttt{array}, \texttt{function}, \texttt{subroutine}, \texttt{parameter} \\
+\texttt{type}        & Tipo Fortran (\texttt{INTEGER}, \texttt{REAL}, \texttt{LOGICAL}, \texttt{CHARACTER}, \ldots) \\
+\texttt{shape}       & Lista de inteiros com as dimensões (só para arrays) \\
+\texttt{is\_param}   & \texttt{True} se for parâmetro formal de subprograma \\
+\texttt{offset}      & Posição no frame de memória da VM (atribuído pelo gerador de código) \\
+\texttt{value}       & Valor da constante (só para \texttt{PARAMETER}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{6.2 Passagens de Análise}
+
+\noindent A análise realiza-se em três passagens:
+
+\begin{enumerate}
+    \item \textbf{Passagem 0} --- Todos os subprogramas são registados na tabela global \textit{antes} de qualquer análise, para permitir chamadas \textit{forward} (uma função pode ser chamada antes de estar definida no ficheiro).
+    \item \textbf{Passagem 1} --- Cada unidade de programa é analisada em detalhe: declarações, statements e expressões são percorridos, os símbolos registados e os erros reportados. As chamadas a subprogramas do mesmo ficheiro são acumuladas numa lista de pendentes, pois os \texttt{param\_types} do subprograma chamado podem ainda não estar preenchidos.
+    \item \textbf{Passagem 2} --- As chamadas pendentes são verificadas: o número de argumentos é comparado com o número de parâmetros formais, que a esta altura já estão todos conhecidos.
+\end{enumerate}
+
+\subsection*{6.3 Verificações Implementadas}
+
+\begin{itemize}
+    \item Redeclaração de variáveis e subprogramas;
+    \item Uso de variáveis não declaradas (com suporte a \textit{implicit typing} quando \texttt{IMPLICIT NONE} não está ativo);
+    \item Compatibilidade de tipos em atribuições: atribuição de \texttt{LOGICAL} a numérico (ou vice-versa) é erro; atribuição de \texttt{REAL} a \texttt{INTEGER} é aviso por perda de precisão;
+    \item Condições de \texttt{IF} e \texttt{ELSEIF} devem ser do tipo \texttt{LOGICAL};
+    \item Variável de controlo de \texttt{DO} recomendada como \texttt{INTEGER} (aviso se não for);
+    \item \texttt{RETURN} fora de subprograma é erro;
+    \item Labels de \texttt{GOTO} e de IF aritmético devem existir no âmbito;
+    \item Dimensões de arrays devem ser constantes inteiras positivas;
+    \item Número de argumentos em chamadas a subprogramas definidos no mesmo ficheiro.
+\end{itemize}
+
+\subsection*{6.4 Implicit Typing}
+
+\noindent Em Fortran 77, variáveis não declaradas recebem automaticamente um tipo: nomes começados por \texttt{I}--\texttt{N} são \texttt{INTEGER}; todos os outros são \texttt{REAL}. O compilador implementa este comportamento em \texttt{lookup\_or\_implicit}, que cria automaticamente uma entrada na tabela quando um símbolo desconhecido é referenciado (desde que \texttt{IMPLICIT NONE} não esteja ativo). Quando \texttt{IMPLICIT NONE} está ativo, o mesmo método lança \texttt{KeyError}, que o analisador converte em erro de compilação.
+
+\subsection*{6.5 Inferência de Tipos}
+
+\noindent A inferência de tipos está implementada na função livre \texttt{infer\_type} em \texttt{symbol\_table.py}. Esta função é partilhada entre o \texttt{SemanticAnalyzer} e o \texttt{CodeGenerator}, evitando duplicação de lógica. A partilha foi possível porque \texttt{infer\_type} é pura (não regista diagnósticos), cabendo ao analisador semântico acrescentar as verificações por cima.
+
+\vspace{0.2cm}
+
+\noindent As regras de inferência seguem o standard Fortran 77: operadores lógicos e relacionais produzem \texttt{LOGICAL}; concatenação (\texttt{//}) produz \texttt{CHARACTER}; em expressões aritméticas mistas, \texttt{REAL} prevalece sobre \texttt{INTEGER} (\textit{widening}). As funções intrínsecas têm tipos de retorno fixos na tabela \texttt{INTRINSICS}, com suporte a funções polimórficas (e.g., \texttt{ABS} e \texttt{MAX} devolvem o tipo do argumento).
+
+\vspace{0.2cm}
+
+\noindent A função \texttt{eval\_const} em \texttt{symbol\_table.py} avalia expressões aritméticas em tempo de compilação. É usada pelo analisador semântico para verificar dimensões de arrays e pelo gerador de código para \textit{constant folding} (secção~\ref{sec:codegen}).
+
+% ================================================================
+\section*{7. Tradução e Geração de Código}
+\addcontentsline{toc}{section}{7. Tradução e Geração de Código}
+\phantomsection
+\label{sec:codegen}
+% ================================================================
+
+\subsection*{7.1 Ausência de Representação Intermédia}
+
+\noindent Optou-se por não implementar uma representação intermédia (IR) explícita, traduzindo diretamente da AST para código da VM. Esta decisão foi motivada por diversos motivos, mas acima de tudo por dificuldades na implementação de uma estrutura funcional e adequada para o contexto do projeto, preferindo a equipa dedicar-se a outras melhorias, como otimizações locais ao código.
+
+\subsection*{7.2 Gestão de Frames de Memória}
+
+\noindent A VM tem dois registos de frame: \texttt{gp} (programa principal) e \texttt{fp} (subprogramas). O método \texttt{\_assign\_offsets} atribui offsets a todos os símbolos de um âmbito antes de gerar qualquer instrução:
+
+\begin{itemize}
+    \item \textbf{Parâmetros formais} de subprogramas recebem offsets negativos relativamente ao \texttt{fp} ($n$ parâmetros ficam em \texttt{fp[-n]}, \ldots, \texttt{fp[-1]}), pois são empilhados pelo chamador antes do \texttt{CALL}.
+    \item \textbf{Variáveis locais} recebem offsets positivos a partir de 0, reservados com \texttt{PUSHN n}.
+    \item \textbf{Arrays} ocupam um único slot no frame (que guarda o endereço do bloco alocado na heap com \texttt{ALLOC n}).
+\end{itemize}
+
+\noindent No programa principal, variáveis são acedidas com \texttt{PUSHG}/\texttt{STOREG}; nos subprogramas, com \texttt{PUSHL} /\texttt{STOREL}.
+
+\subsection*{7.3 Arrays}
+
+\noindent Arrays são alocados na heap com \texttt{ALLOC n} (onde $n$ é o produto das dimensões) durante a inicialização do âmbito. O endereço base fica guardado no slot escalar do array. Os acessos usam \texttt{LOADN}/\texttt{STOREN}, que recebem o endereço base e um índice flat.
+
+\vspace{0.2cm}
+
+\noindent O índice flat é calculado em \textit{column-major order}, 0-based:
+\[
+\text{flat} = (i_1 - 1) + d_1 \cdot (i_2 - 1) + d_1 d_2 \cdot (i_3 - 1) + \cdots
+\]
+
+\subsection*{7.4 Subprogramas}
+
+\noindent A chamada a uma \texttt{FUNCTION} ou \texttt{SUBROUTINE} segue o protocolo da VM: os argumentos são empilhados, seguidos do endereço do subprograma (\texttt{PUSHA nome}), e então é executado \texttt{CALL}. A VM guarda automaticamente \texttt{pc} e \texttt{fp} na \textit{call stack} e restaura-os no \texttt{RETURN}.
+
+\vspace{0.2cm}
+
+\noindent Uma \texttt{FUNCTION} devolve o seu valor atribuindo ao símbolo com o próprio nome (e.g., \texttt{CONVRT = VAL}). No momento do \texttt{RETURN}, o gerador de código empilha esse valor (\texttt{PUSHL offset}) antes de emitir a instrução \texttt{RETURN} da VM. O valor fica no topo da stack após o retorno, onde pode ser consumido pela expressão chamadora.
+
+\subsection*{7.5 Otimizações}
+
+\noindent Foram implementadas três otimizações diretamente no gerador de código:
+
+\paragraph{Constant Folding.} Antes de gerar qualquer instrução para uma expressão, \texttt{\_gen\_expr} tenta avaliá-la em tempo de compilação com \texttt{eval\_const}. Se for possível, emite um único \texttt{PUSHI}/\texttt{PUSHF}:
+
+\vspace{0.2cm}
+
+\begin{lstlisting}[style=py]
+def _gen_expr(self, node):
+    if isinstance(node, (BinOp, UnaryOp)):
+        val = self._eval_const(node)
+        if val is not None:
+            if isinstance(val, float):
+                self._emit(f'PUSHF {val}')
+            else:
+                self._emit(f'PUSHI {int(val)}')
+            return
+    # ... geracao normal ...
+\end{lstlisting}
+
+\vspace{0.2cm}
+
+\noindent Esta otimização é especialmente eficaz para índices de arrays com constantes (e.g., \texttt{A(3)} gera diretamente \texttt{PUSHI 2}) e para expressões com constantes \texttt{PARAMETER}.
+
+\paragraph{Eliminação de JUMPs Redundantes (\textit{Peephole}).} Ao emitir um label, verifica-se se a última instrução emitida é um \texttt{JUMP} para esse mesmo label. Nesse caso, o \texttt{JUMP} é eliminado, pois é um salto para a instrução imediatamente seguinte. Isto remove sistematicamente os \texttt{JUMP ENDIF} que surgiriam no último ramo de um \texttt{IF-THEN-ELSE}:
+
+\vspace{0.2cm}
+
+\begin{lstlisting}[style=py]
+def _emit_label(self, label):
+    jump_instr = f'JUMP {label}'
+    if self.output and self.output[-1] == jump_instr:
+        self.output.pop()   # eliminar JUMP inutil
+    self.output.append(f'{label}:')
+\end{lstlisting}
+
+\paragraph{Potência com Expoente Constante.} A operação \texttt{**} com expoente inteiro constante $n > 0$ é expandida em $n-1$ duplicações seguidas de $n-1$ multiplicações, evitando um loop em \textit{runtime}. Para expoentes negativos, gera-se \texttt{1.0 / (base**|n|)}. Para expoentes variáveis, recorre-se a um loop em \textit{runtime} com variáveis temporárias alocadas dinamicamente no frame atual (com \texttt{PUSHN 1}), usando o contador \texttt{\_next\_temp\_offset} para garantir que cada temporário ocupa um slot distinto.
+
+% ================================================================
+\section*{8. Testes}
+\addcontentsline{toc}{section}{8. Testes}
+% ================================================================
+
+\noindent Foram criados testes para verificar o correto funcionamento do compilador em vários cenários. Para além dos cinco exemplos do enunciado (Olá Mundo, Fatorial, Primo, Soma de Array e Conversor de Bases), foram criados testes adicionais para cobrir funcionalidades específicas e situações de erro.
+
+\vspace{0.2cm}
+
+\noindent As funcionalidades testadas incluem:
+
+\begin{itemize}
+    \item Declaração e uso de variáveis escalares e arrays (uni e multidimensionais);
+    \item Expressões aritméticas, relacionais e lógicas;
+    \item Estruturas \texttt{IF-THEN-ELSEIF-ELSE-ENDIF} aninhadas;
+    \item IF lógico de uma linha e IF aritmético de três labels;
+    \item Ciclos \texttt{DO} com e sem passo, incluindo aninhamento;
+    \item \texttt{GOTO} e labels em âmbitos com vários pontos de entrada;
+    \item \texttt{FUNCTION} e \texttt{SUBROUTINE} com múltiplos argumentos;
+    \item \texttt{IMPLICIT NONE} e deteção de variáveis não declaradas;
+    \item Funções intrínsecas (\texttt{MOD}, \texttt{ABS}, \texttt{MAX}, \texttt{MIN}, \texttt{SIN}, \texttt{COS}, \texttt{INT}, \texttt{REAL}, \texttt{LEN});
+    \item Concatenação de strings com \texttt{//};
+    \item Constantes \texttt{PARAMETER} e \textit{constant folding};
+    \item Recuperação de erros: um DO loop sem label terminal correspondente gera um aviso no stderr mas o compilador continua, incluindo o corpo recolhido na AST e gerando código para os statements alcançáveis.
+\end{itemize}
+
+\subsection*{8.1 Verificação das Otimizações}
+
+\noindent Para avaliar o impacto das otimizações implementadas no gerador de código, foram comparados dois programas de teste compilados com e sem otimizações ativadas. Foram analisadas duas métricas distintas:
+
+\begin{itemize}
+    \item Número de instruções geradas;
+    \item Número de instruções executadas pela VM.
+\end{itemize}
+
+\vspace{0.2cm}
+
+\noindent O Teste~1 avalia sobretudo a otimização da potência com expoente constante (\texttt{**}), presentes no ficheiro \textit{01\_expr.f}, enquanto o Teste~2 avalia \textit{constant folding} em índices de arrays e eliminação de instruções redundantes, presentes no ficheiro \textit{07\_mat2d.f}.
+
+\vspace{0.4cm}
+
+\begin{figure}[H]
+\centering
+
+\begin{minipage}{0.495\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=16pt,
+    width=\textwidth,
+    height=8.2cm,
+    ymin=0,
+    ymax=75,
+    ylabel={Instruções geradas pelo codegen},
+    symbolic x coords={Teste 1,Teste 2},
+    xtick=data,
+    nodes near coords,
+    enlarge x limits=0.32,
+    legend style={
+        at={(0.5,1.12)},
+        anchor=south,
+        legend columns=2,
+        font=\small,
+        draw=none
+    },
+    ylabel style={font=\small},
+    tick label style={font=\small},
+]
+
+\addplot[
+    fill=blue!60
+] coordinates {
+    (Teste 1,65)
+    (Teste 2,52)
+};
+
+\addplot[
+    fill=green!60
+] coordinates {
+    (Teste 1,49)
+    (Teste 2,45)
+};
+
+\legend{Sem otimizações,Com otimizações}
+
+\end{axis}
+\end{tikzpicture}
+
+\caption{Número de instruções geradas pelo codegen.}
+\end{minipage}
+\hfill
+\begin{minipage}{0.495\textwidth}
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+    ybar,
+    bar width=16pt,
+    width=\textwidth,
+    height=8.2cm,
+    ymin=0,
+    ymax=220,
+    ylabel={Instruções executadas pela VM},
+    symbolic x coords={Teste 1,Teste 2},
+    xtick=data,
+    nodes near coords,
+    enlarge x limits=0.32,
+    legend style={
+        at={(0.5,1.12)},
+        anchor=south,
+        legend columns=2,
+        font=\small,
+        draw=none
+    },
+    ylabel style={font=\small},
+    tick label style={font=\small},
+]
+
+\addplot[
+    fill=red!60
+] coordinates {
+    (Teste 1,65)
+    (Teste 2,192)
+};
+
+\addplot[
+    fill=orange!70
+] coordinates {
+    (Teste 1,49)
+    (Teste 2,184)
+};
+
+\legend{Sem otimizações,Com otimizações}
+
+\end{axis}
+\end{tikzpicture}
+
+\caption{Número de instruções executadas pela máquina virtual.}
+\end{minipage}
+
+\end{figure}
+
+\vspace{0.2cm}
+
+\noindent Os resultados mostram uma redução consistente tanto no número de instruções geradas como no número de instruções efetivamente executadas pela VM. O impacto é particularmente visível no Teste~1, onde a expansão otimizada da potência constante elimina múltiplas instruções redundantes. No Teste~2, a melhoria resulta sobretudo do \textit{constant folding} aplicado aos índices do array e da eliminação de saltos redundantes.
+
+% ================================================================
+\section*{9. Manual de Utilização}
+\addcontentsline{toc}{section}{9. Manual de Utilização}
+\label{sec:manual}
+% ================================================================
+
+\subsection*{Dependências}
+
+O compilador requer Python 3.10 ou superior e algumas bibliotecas Python. Para instalar:
+
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small, frame=single]
+pip install -r requirements.txt
+\end{lstlisting}
+
+\subsection*{Interface de Linha de Comandos}
+
+O ponto de entrada é \texttt{main.py}:
+
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small, frame=single]
+python main.py <fase> <alvo> [--summary] [-o SAIDA]
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Argumento} & \textbf{Descrição} \\
+\midrule
+\texttt{<fase>}     & \texttt{lex}, \texttt{parse}, \texttt{sem} ou \texttt{codegen} \\
+\texttt{<alvo>}     & Ficheiro \texttt{.f} ou diretoria (processa todos os \texttt{.f}) \\
+\texttt{--summary}  & Modo resumido (contagens em vez de detalhe) \\
+\texttt{-o SAIDA}   & Ficheiro ou diretoria de saída (só para \texttt{codegen}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Exemplos}
+
+\begin{lstlisting}[language=bash, basicstyle=\ttfamily\small, frame=single]
+# Analise lexica
+python src/main.py lex tests/programa.f
+
+# Parse e visualizacao da AST
+python src/main.py parse tests/programa.f
+
+# Analise semantica com tabela de simbolos
+python src/main.py sem tests/programa.f
+
+# Compilacao completa, codigo para o ecra
+python src/main.py codegen tests/programa.f
+
+# Compilar todos os .f de uma pasta, um .txt por ficheiro
+python src/main.py codegen tests/ -o codigo_vm/
+
+# Compilacaoo para um unico ficheiro de saida
+python src/main.py codegen tests/programa.f -o saida.txt
+\end{lstlisting}
+
+\noindent Quando o alvo é uma diretoria, cada ficheiro \texttt{.f} gera um ficheiro \texttt{.txt} separado na diretoria de saída. Se o alvo de saída for um ficheiro único, os códigos são concatenados com separadores. Os erros e avisos de todas as fases são escritos em \texttt{stderr}, separados da saída principal.
+
+% ================================================================
+\section*{10. Dificuldades Encontradas}
+\addcontentsline{toc}{section}{10. Dificuldades Encontradas}
+% ================================================================
+
+\paragraph{Resolução de DO Loops.} A maior dificuldade sintática foi lidar com a estrutura dos ciclos \texttt{DO}. Como o corpo não tem delimitador explícito, a gramática LALR(1) não consegue determinar durante o \textit{parse} quais os statements que lhe pertencem. A solução com pilha em pós-processamento (secção~5.4) revelou-se correta mesmo para loops aninhados e para loops que partilham o mesmo label terminal.
+
+\paragraph{Protocolo de CALL na VM.} A semântica do par \texttt{CALL}/\texttt{RETURN} da VM exige que os argumentos sejam empilhados pelo chamador e que o \texttt{RETURN} restaure o \texttt{sp} para o valor antes dos argumentos, descartando-os automaticamente. Perceber esta semântica exigiu leitura cuidadosa da documentação da VM e testes para confirmar o comportamento em casos com subprogramas de múltiplos parâmetros.
+
+\paragraph{Ordem dos operandos em CONCAT.} A instrução \texttt{CONCAT} da VM concatena as duas strings na ordem em que foram empilhadas, mas a string empilhada mais recentemente é colocada \textit{antes} no resultado. Isso obrigou a inverter a ordem de geração dos operandos do operador \texttt{//} em relação à ordem natural da expressão.
+
+\paragraph{Semântica de SUP/INF para MIN/MAX.} A documentação da VM descreve \texttt{SUP} como ``toma $n$ e $m$ da pilha e empilha $m > n$'' — o que significa que o segundo valor a ser desempilhado é $m$ (o empilhado mais cedo). A implementação de \texttt{MAX}/\texttt{MIN} com múltiplos argumentos via \texttt{COPY 2} e \texttt{SUP}/\texttt{INF} exigiu raciocínio cuidadoso sobre esta convenção para determinar qual dos dois valores manter em cada comparação.
+
+\paragraph{Temporários para potência variável.} Quando o expoente de \texttt{**} não é conhecido em tempo de compilação, é necessário um loop em \textit{runtime}. A VM não dispõe de instrução para aceder a posições arbitrárias da stack, pelo que foi necessário alocar slots temporários no frame atual com \texttt{PUSHN 1} e acedê-los via \texttt{PUSHL}/\texttt{STOREL}. O contador \texttt{\_next\_temp\_offset} garante que os temporários não colidem com as variáveis locais declaradas.
+
+% ================================================================
+\section*{11. Conclusão}
+\addcontentsline{toc}{section}{11. Conclusão}
+% ================================================================
+
+\noindent O compilador desenvolvido implementa com sucesso todas as funcionalidades mínimas exigidas pelo enunciado, bem como a valorização de subprogramas (\texttt{FUNCTION} e \texttt{SUBROUTINE}). O sistema processa corretamente os cinco exemplos do enunciado e um conjunto adicional de programas de teste, gerando código executável na VM fornecida.
+
+\vspace{0.2cm}
+
+\noindent As decisões de design mais relevantes foram: o pré-processamento centralizado no lexer (que simplificou o tratamento do formato fixo e a conversão \textit{case-insensitive}), o adiamento da distinção FuncCall/Array para a análise semântica, o pós-processamento com pilha para os DO loops, a partilha de \texttt{infer\_type} e \texttt{eval\_const} entre o analisador semântico e o gerador de código, e a geração direta a partir da AST sem IR intermédia.
+
+\vspace{0.2cm}
+
+\noindent As otimizações implementadas --- \textit{constant folding}, eliminação de JUMPs redundantes e expansão de potência com expoente constante --- reduzem o tamanho e melhoram a eficiência do código gerado para os casos mais comuns, sem complexidade excessiva.
+
+\vspace{0.2cm}
+
+\noindent Como trabalho futuro, destacam-se: suporte a \texttt{COMMON} blocks e \texttt{EQUIVALENCE}, melhor suporte a \texttt{CHARACTER} com tamanhos declarados (\texttt{CHARACTER*n}), implementação de uma IR para permitir otimizações globais, e suporte ao formato livre (\textit{free-form}) das versões mais recentes do Fortran.
+
+\end{document}
